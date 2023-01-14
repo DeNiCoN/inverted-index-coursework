@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use futures::future::{self, Ready};
 use inverted_index_coursework::{
     rpc::{InvertedIndexService, InvertedIndexServiceClient},
+    simple_inverted_index::SimpleInvertedIndex,
     InvertedIndex,
 };
 use tarpc::{
@@ -12,12 +13,22 @@ use tarpc::{
 use tokio::sync::RwLock;
 
 #[derive(Clone)]
-struct HelloServer {
-    inverted_index_lock: Arc<RwLock<InvertedIndex>>,
+struct Server<T: InvertedIndex> {
+    inverted_index_lock: Arc<RwLock<T>>,
+}
+
+impl<T: InvertedIndex> Server<T> {
+    fn new() -> Self {
+        Self {
+            inverted_index_lock: Arc::new(RwLock::new(T::new())),
+        }
+    }
 }
 
 #[tarpc::server]
-impl InvertedIndexService for HelloServer {
+impl<T: InvertedIndex + std::marker::Send + std::marker::Sync + 'static> InvertedIndexService
+    for Server<T>
+{
     async fn get(self, _: context::Context, term: String) -> Vec<String> {
         self.inverted_index_lock.read().await.get(&term)
     }
@@ -33,9 +44,7 @@ impl InvertedIndexService for HelloServer {
 async fn main() -> anyhow::Result<()> {
     let (client_transport, server_transport) = tarpc::transport::channel::unbounded();
 
-    let server_data = HelloServer {
-        inverted_index_lock: Arc::new(RwLock::new(InvertedIndex::new())),
-    };
+    let server_data = Server::<SimpleInvertedIndex>::new();
 
     let server = server::BaseChannel::with_defaults(server_transport);
     tokio::spawn(server.execute(server_data.serve()));

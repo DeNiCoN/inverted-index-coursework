@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Instant};
 
-use inverted_index_coursework::InvertedIndex;
+use inverted_index_coursework::{simple_inverted_index::SimpleInvertedIndex, InvertedIndex};
 use plotters::prelude::*;
 
 const OUT_FILE_NAME: &'static str = "build_time.png";
@@ -9,7 +9,7 @@ const ITERATIONS: i32 = 10;
 
 fn benchmark_build(num_threads: i32) -> f32 {
     let start = Instant::now();
-    let _ = InvertedIndex::build(
+    let _ = SimpleInvertedIndex::build(
         FILES.into_iter().map(|s| PathBuf::from(s)).collect(),
         num_threads,
     );
