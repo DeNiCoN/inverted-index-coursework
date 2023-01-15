@@ -3,7 +3,9 @@ use std::{path::PathBuf, sync::Arc};
 use futures::future::{self, Ready};
 use inverted_index_coursework::{
     rpc::{InvertedIndexService, InvertedIndexServiceClient},
-    simple_inverted_index::{SimpleInvertedIndex, ThreadedSimpleInvertedIndex},
+    simple_inverted_index::{
+        MultiFileThreadedSimpleInvertedIndex, SimpleInvertedIndex, ThreadedSimpleInvertedIndex,
+    },
     InvertedIndex,
 };
 use tarpc::{
@@ -36,7 +38,7 @@ impl<T: InvertedIndex + std::marker::Send + std::marker::Sync + 'static> Inverte
     async fn build(self, _: context::Context, paths: Vec<String>) {
         let mut inverted_index = self.inverted_index_lock.write().await;
         *inverted_index =
-            InvertedIndex::build(paths.into_iter().map(|s| PathBuf::from(s)).collect(), 1);
+            InvertedIndex::build(paths.into_iter().map(|s| PathBuf::from(s)).collect(), 12);
     }
 }
 
@@ -44,7 +46,7 @@ impl<T: InvertedIndex + std::marker::Send + std::marker::Sync + 'static> Inverte
 async fn main() -> anyhow::Result<()> {
     let (client_transport, server_transport) = tarpc::transport::channel::unbounded();
 
-    let server_data = Server::<ThreadedSimpleInvertedIndex>::new();
+    let server_data = Server::<MultiFileThreadedSimpleInvertedIndex>::new();
 
     let server = server::BaseChannel::with_defaults(server_transport);
     tokio::spawn(server.execute(server_data.serve()));

@@ -1,7 +1,9 @@
 use std::{path::PathBuf, time::Instant};
 
 use inverted_index_coursework::{
-    simple_inverted_index::{SimpleInvertedIndex, ThreadedSimpleInvertedIndex},
+    simple_inverted_index::{
+        MultiFileThreadedSimpleInvertedIndex, SimpleInvertedIndex, ThreadedSimpleInvertedIndex,
+    },
     InvertedIndex,
 };
 use plotters::prelude::*;
@@ -12,7 +14,7 @@ const ITERATIONS: i32 = 10;
 
 fn benchmark_build(num_threads: i32) -> f32 {
     let start = Instant::now();
-    let _ = ThreadedSimpleInvertedIndex::build(
+    let _ = MultiFileThreadedSimpleInvertedIndex::build(
         FILES.into_iter().map(|s| PathBuf::from(s)).collect(),
         num_threads,
     );
