@@ -3,6 +3,7 @@ use std::{
     collections::HashMap,
     fs::File,
     path::{Path, PathBuf},
+    sync::{Mutex, MutexGuard},
 };
 
 use lazy_static::lazy_static;
@@ -83,5 +84,77 @@ impl InvertedIndex for SimpleInvertedIndex {
             .iter()
             .map(|id| self.docs[*id as usize].to_string())
             .collect()
+    }
+}
+
+fn process_file_multithreaded(
+    resources: &Mutex<(Vec<String>, HashMap<String, PostingList>)>,
+    file: &Path,
+) {
+    let words: Vec<String> = tokenize_file(file).collect();
+
+    let (docs, index) = &mut *resources.lock().unwrap();
+    let doc_id = docs.len() as DocID;
+    docs.push(file.to_str().unwrap().to_owned());
+
+    for word in words {
+        index
+            .entry(word)
+            .and_modify(|list| list.push(doc_id))
+            .or_insert(vec![doc_id]);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ThreadedSimpleInvertedIndex {
+    implementation: SimpleInvertedIndex,
+}
+
+impl InvertedIndex for ThreadedSimpleInvertedIndex {
+    fn new() -> Self {
+        Self {
+            implementation: SimpleInvertedIndex::new(),
+        }
+    }
+
+    fn get(&self, term: &str) -> Vec<String> {
+        self.implementation.get(term)
+    }
+
+    fn build(paths: Vec<PathBuf>, num_threads: i32) -> Self {
+        let resources = Mutex::new((Vec::new(), HashMap::new()));
+
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads as usize)
+            .build()
+            .unwrap();
+
+        pool.scope(|s| {
+            for path in paths {
+                if path.is_file() {
+                    s.spawn(|_| {
+                        let path = path;
+                        process_file_multithreaded(&resources, &path);
+                    });
+                } else if path.is_dir() {
+                    for entry in walkdir::WalkDir::new(path)
+                        .into_iter()
+                        .filter_map(|e| e.ok())
+                    {
+                        if entry.file_type().is_file() {
+                            s.spawn(|_| {
+                                let entry = entry;
+                                process_file_multithreaded(&resources, entry.path());
+                            });
+                        }
+                    }
+                }
+            }
+        });
+
+        let (docs, index) = resources.into_inner().unwrap();
+        return Self {
+            implementation: SimpleInvertedIndex { docs, index },
+        };
     }
 }
